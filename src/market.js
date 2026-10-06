@@ -36,6 +36,8 @@ export async function fetchQuote(ticker, { from, to }) {
   const priorVol = bars.slice(Math.max(0, baseIdx - 19), baseIdx + 1).map(b => b.volume).filter(Boolean);
   const avgPeriod = mean(periodVol), avgPrior = mean(priorVol);
 
+  const live = end.date === nyDate(Date.now() / 1000) && Date.now() / 1000 < (r.meta.currentTradingPeriod?.regular?.end ?? 0);
+
   return {
     ticker,
     name: r.meta.longName || r.meta.shortName || ticker,
@@ -47,8 +49,11 @@ export async function fetchQuote(ticker, { from, to }) {
     changePct: pct(end.close, base.close),
     ret5dPct: pct(end.close, back(5).close),
     ret1mPct: pct(end.close, back(21).close),
-    volumeRatio: avgPeriod && avgPrior ? avgPeriod / avgPrior : null,
+    // A still-open session only has partial-day volume, which would look misleadingly "light": leave it out.
+    volumeRatio: !live && avgPeriod && avgPrior ? avgPeriod / avgPrior : null,
     currency: r.meta.currency,
+    // True while the end bar is today's still-open session, i.e. the "close" is a live intraday price.
+    live,
   };
 }
 
@@ -62,9 +67,21 @@ export async function findMovers(universe, { from, to, topN = 5, concurrency = 1
   quotes.forEach(q => (counts[q.sessionDate] = (counts[q.sessionDate] || 0) + 1));
   const sessionDate = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || b.localeCompare(a))[0];
   const live = quotes.filter(q => q.sessionDate === sessionDate).sort((a, b) => b.changePct - a.changePct);
+  // Breadth across the whole universe: the factual basis of the "market mood" overview.
+  const sortedMoves = live.map(q => q.changePct).sort((a, b) => a - b);
+  const mid = Math.floor(sortedMoves.length / 2);
+  const breadth = {
+    advancers: live.filter(q => q.changePct > 0).length,
+    decliners: live.filter(q => q.changePct < 0).length,
+    avgChangePct: mean(sortedMoves),
+    medianChangePct: sortedMoves.length % 2 ? sortedMoves[mid] : (sortedMoves[mid - 1] + sortedMoves[mid]) / 2,
+    sessions: live[0]?.sessions ?? 1,
+  };
   return {
     sessionDate,
     baselineDate: live[0]?.prevDate,
+    sessionLive: live.filter(q => q.live).length > live.length / 2,
+    breadth,
     scanned: live.length,
     failed,
     bullish: live.slice(0, topN).filter(q => q.changePct > 0),
