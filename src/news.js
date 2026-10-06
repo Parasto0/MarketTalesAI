@@ -21,9 +21,9 @@ async function yahooNews(ticker) {
   })).filter(n => n.title && n.url && n.related);
 }
 
-async function googleNews(ticker, name) {
+async function googleNews(ticker, name, since, until) {
   const short = name.replace(/,? (Inc|Corp|Corporation|Ltd|Co|Company|plc)\.?$/i, '');
-  const q = encodeURIComponent(`"${short}" OR ${ticker} stock when:3d`);
+  const q = encodeURIComponent(`"${short}" OR ${ticker} stock after:${since} before:${until}`);
   const xml = await getText(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
   return [...xml.matchAll(/<item>(.*?)<\/item>/gs)].slice(0, 10).map(m => {
     const it = m[1];
@@ -35,13 +35,18 @@ async function googleNews(ticker, name) {
   }).filter(n => n.title && n.url);
 }
 
-// Up to `limit` recent, de-duplicated headlines (newest first). Headlines only: no full-article fetching.
-export async function fetchNews(ticker, name, { limit = 8, maxAgeDays = 4, now = Date.now() } = {}) {
-  const [y, g] = await Promise.allSettled([yahooNews(ticker), googleNews(ticker, name)]);
+const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+// Up to `limit` de-duplicated headlines inside [from - 3d, to + 2d] (newest first), so a past date only sees
+// news from around that time. Headlines only: no full-article fetching.
+export async function fetchNews(ticker, name, { from, to, limit = 8 }) {
+  const lo = Date.parse(`${from}T00:00:00Z`) - 3 * 864e5;
+  const hi = Date.parse(`${to}T00:00:00Z`) + 3 * 864e5; // exclusive upper bound = to + 2 full days
+  const [y, g] = await Promise.allSettled([yahooNews(ticker), googleNews(ticker, name, ymd(lo), ymd(hi))]);
   const all = [...(y.value || []), ...(g.value || [])];
   const seen = new Set();
   return all
-    .filter(n => !n.published || now - Date.parse(n.published) <= maxAgeDays * 864e5)
+    .filter(n => !n.published || (Date.parse(n.published) >= lo && Date.parse(n.published) < hi))
     .filter(n => {
       const k = n.title.toLowerCase().replace(/\W+/g, ' ').slice(0, 60);
       if (seen.has(k)) return false;

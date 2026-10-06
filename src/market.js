@@ -4,49 +4,67 @@ const nyDate = (unixSec) =>
   new Date(unixSec * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 const pct = (a, b) => (b ? (a / b - 1) * 100 : null);
+const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+const shiftDays = (ymd, n) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 864e5);
 
-// Fetch ~3 months of daily bars and derive the latest session's move plus context.
-export async function fetchQuote(ticker) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3mo&interval=1d`;
+// Fetch daily bars around the period and derive its move plus context.
+// A single day is the period from === to: baseline = close of the prior session, end = that day's close
+// (or the latest session on/before `to` if the market was closed, e.g. a weekend or a not-yet-closed day).
+export async function fetchQuote(ticker, { from, to }) {
+  const p1 = Math.floor(shiftDays(from, -60).getTime() / 1000);
+  const p2 = Math.floor(shiftDays(to, 2).getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${p1}&period2=${p2}&interval=1d`;
   const j = await getJson(url);
   const r = j?.chart?.result?.[0];
-  if (!r) throw new Error(`no chart data for ${ticker}`);
+  if (!r?.timestamp) throw new Error(`no chart data for ${ticker}`);
   const q = r.indicators.quote[0];
   const bars = r.timestamp
-    .map((t, i) => ({ t, date: nyDate(t), close: q.close[i], volume: q.volume[i] }))
+    .map((t, i) => ({ date: nyDate(t), close: q.close[i], volume: q.volume[i] }))
     .filter(b => b.close != null);
-  if (bars.length < 3) throw new Error(`too few bars for ${ticker}`);
-  const last = bars.at(-1), prev = bars.at(-2);
-  const at = (n) => bars[Math.max(0, bars.length - 1 - n)];
-  const prior20 = bars.slice(-21, -1).filter(b => b.volume);
-  const avgVol = prior20.length ? prior20.reduce((s, b) => s + b.volume, 0) / prior20.length : null;
+
+  let endIdx = -1;
+  bars.forEach((b, i) => { if (b.date <= to) endIdx = i; });
+  if (endIdx < 0) throw new Error(`insufficient bars for ${ticker}`);
+  // If no session falls inside the period (weekend/holiday, or today's session not yet available), fall back
+  // to the latest session on/before `to` measured against the session before it.
+  const baseIdx = Math.min(bars.findLastIndex(b => b.date < from), endIdx - 1);
+  if (baseIdx < 0) throw new Error(`insufficient bars for ${ticker}`);
+  const end = bars[endIdx], base = bars[baseIdx];
+  const back = (n) => bars[Math.max(0, endIdx - n)];
+
+  const periodVol = bars.slice(baseIdx + 1, endIdx + 1).map(b => b.volume).filter(Boolean);
+  const priorVol = bars.slice(Math.max(0, baseIdx - 19), baseIdx + 1).map(b => b.volume).filter(Boolean);
+  const avgPeriod = mean(periodVol), avgPrior = mean(priorVol);
+
   return {
     ticker,
     name: r.meta.longName || r.meta.shortName || ticker,
-    sessionDate: last.date,
-    prevDate: prev.date,
-    close: last.close,
-    prevClose: prev.close,
-    changePct: pct(last.close, prev.close),
-    ret5dPct: pct(last.close, at(5).close),
-    ret1mPct: pct(last.close, at(21).close),
-    volumeRatio: avgVol && last.volume ? last.volume / avgVol : null,
+    sessionDate: end.date,
+    prevDate: base.date,
+    sessions: endIdx - baseIdx,
+    close: end.close,
+    prevClose: base.close,
+    changePct: pct(end.close, base.close),
+    ret5dPct: pct(end.close, back(5).close),
+    ret1mPct: pct(end.close, back(21).close),
+    volumeRatio: avgPeriod && avgPrior ? avgPeriod / avgPrior : null,
     currency: r.meta.currency,
   };
 }
 
-export async function findMovers(universe, { topN = 5, concurrency = 12 } = {}) {
-  const res = await mapLimit(universe, concurrency, fetchQuote);
+export async function findMovers(universe, { from, to, topN = 5, concurrency = 12 } = {}) {
+  const res = await mapLimit(universe, concurrency, (t) => fetchQuote(t, { from, to }));
   const quotes = res.filter(x => x && !x.error && x.changePct != null);
   const failed = res.filter(x => x?.error).map(x => x.item);
   if (quotes.length < universe.length / 2) throw new Error(`market data mostly unavailable (${quotes.length}/${universe.length})`);
-  // Only compare stocks on the most common (latest) session so stale tickers don't distort the ranking.
+  // Only compare stocks measured over the same end session so stale tickers don't distort the ranking.
   const counts = {};
   quotes.forEach(q => (counts[q.sessionDate] = (counts[q.sessionDate] || 0) + 1));
   const sessionDate = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || b.localeCompare(a))[0];
   const live = quotes.filter(q => q.sessionDate === sessionDate).sort((a, b) => b.changePct - a.changePct);
   return {
     sessionDate,
+    baselineDate: live[0]?.prevDate,
     scanned: live.length,
     failed,
     bullish: live.slice(0, topN).filter(q => q.changePct > 0),

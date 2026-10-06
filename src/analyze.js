@@ -7,16 +7,16 @@ const fmt = (n, d = 2) => (n == null ? 'n/a' : `${n >= 0 ? '+' : ''}${n.toFixed(
 export function buildPrompt(stock, news, asOf) {
   const facts = [
     `Ticker: ${stock.ticker} (${stock.name})`,
-    `Session: ${stock.sessionDate} (previous session ${stock.prevDate})`,
-    `Close ${stock.close.toFixed(2)} ${stock.currency} vs previous close ${stock.prevClose.toFixed(2)} => daily move ${fmt(stock.changePct)}`,
+    `Period: close of ${stock.prevDate} to close of ${stock.sessionDate} (${stock.sessions} trading session${stock.sessions === 1 ? '' : 's'})`,
+    `Close ${stock.close.toFixed(2)} ${stock.currency} vs ${stock.prevClose.toFixed(2)} => move over the period ${fmt(stock.changePct)}`,
     `5-session return: ${fmt(stock.ret5dPct)}; ~1-month return: ${fmt(stock.ret1mPct)}`,
-    `Volume vs 20-day average: ${stock.volumeRatio == null ? 'n/a' : stock.volumeRatio.toFixed(2) + 'x'}`,
+    `Average volume in period vs prior 20 sessions: ${stock.volumeRatio == null ? 'n/a' : stock.volumeRatio.toFixed(2) + 'x'}`,
   ].join('\n');
   const headlines = news.length
     ? news.map((n, i) => `[${i + 1}] ${n.published?.slice(0, 10) ?? 'undated'} | ${n.publisher || 'unknown'} | ${n.title}`).join('\n')
     : '(no recent headlines found)';
 
-  return `You are the analysis step of a market-research agent. Today is ${asOf}. Use ONLY the facts and headlines below; do not use outside knowledge of recent events and never invent data, news, catalysts or sources.
+  return `You are the analysis step of a market-research agent. The analysis date is ${asOf}; forecasts are made as of that date. Use ONLY the facts and headlines below; do not use outside knowledge of recent events and never invent data, news, catalysts or sources.
 
 VERIFIED MARKET DATA (computed from price data, treat as fact):
 ${facts}

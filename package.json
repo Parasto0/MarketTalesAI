@@ -4,6 +4,6 @@
   "description": "Autonomous daily market-movers research agent (MVP)",
   "type": "module",
   "bin": { "markettales": "src/index.js" },
-  "scripts": { "start": "node src/index.js" },
+  "scripts": { "start": "node src/server.js", "cli": "node src/index.js" },
   "engines": { "node": ">=20" }
 }

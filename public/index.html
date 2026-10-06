@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarketTales AI</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f0f2f5; --text: #14181f; --muted: #5d6675; --border: #dfe3ea;
+    --accent: #3b5bdb; --accent-text: #ffffff;
+    --bull: #137a3f; --bull-bg: #e4f5ea; --bear: #b42318; --bear-bg: #fdeceb; --neutral: #5d6675; --neutral-bg: #eceff3;
+    --warn-bg: #fff4d6; --warn: #7a5200; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --surface: #181c24; --surface-2: #20252f; --text: #e8ebf1; --muted: #9aa4b5; --border: #2b313d;
+      --accent: #7c93ff; --accent-text: #0f1218;
+      --bull: #4ade80; --bull-bg: #12301f; --bear: #ff8a80; --bear-bg: #3a1b19; --neutral: #9aa4b5; --neutral-bg: #262c37;
+      --warn-bg: #3a2f10; --warn: #f2c35b; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px 20px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label, .field > .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  input[type=date], input[type=month] { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-width: 150px; color-scheme: light dark; }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .seg input:checked + label { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+  .seg input:focus-visible + label { outline: 2px solid var(--accent); }
+  .inputs { display: flex; gap: 12px; flex-wrap: wrap; }
+  button.primary { font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px; padding: 10px 20px; cursor: pointer; }
+  button.primary:disabled { opacity: .55; cursor: progress; }
+  button:focus-visible, .card:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  #status { margin-top: 16px; display: none; }
+  .bar { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .bar.indet > i { width: 35%; animation: slide 1.2s infinite ease-in-out; }
+  @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+  .status-line { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 8px 0 4px; gap: 8px; }
+  .log { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); max-height: 120px; overflow: auto; }
+  .log li::before { content: "✓ "; color: var(--bull); }
+  .error { background: var(--bear-bg); color: var(--bear); border-radius: 8px; padding: 10px 12px; margin-top: 16px; display: none; }
+
+  #summary { display: none; margin: 20px 0 12px; }
+  #summary h2 { font-size: 18px; margin: 0 0 2px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .grid { display: none; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid > .col, .card, .row1 > div { min-width: 0; }
+  .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .nm { overflow-wrap: anywhere; }
+  .col h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .col.bull h3 { color: var(--bull); } .col.bear h3 { color: var(--bear); }
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 12px 14px; cursor: pointer; box-shadow: var(--shadow); width: 100%; }
+  .bull .card { border-left-color: var(--bull); } .bear .card { border-left-color: var(--bear); }
+  .card:hover { border-color: var(--accent); }
+  .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .tk { font-weight: 700; font-size: 16px; } .nm { color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+  .mv { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 16px; }
+  .bull .mv { color: var(--bull); } .bear .mv { color: var(--bear); }
+  .cat { margin: 4px 0 8px; font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--neutral-bg); color: var(--neutral); font-weight: 600; white-space: nowrap; }
+  .chip.up { background: var(--bull-bg); color: var(--bull); } .chip.down { background: var(--bear-bg); color: var(--bear); }
+  .empty { color: var(--muted); font-size: 14px; padding: 12px; }
+
+  #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 10; }
+  #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--surface); z-index: 11; transform: translateX(100%); transition: transform .2s; overflow-y: auto; padding: 20px; box-shadow: -8px 0 24px rgba(0,0,0,.2); }
+  body.open #drawer { transform: none; } body.open #backdrop { display: block; }
+  .d-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .d-head h2 { margin: 0; font-size: 20px; } .d-head .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .x { font: inherit; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 34px; height: 34px; cursor: pointer; flex: none; }
+  .step { margin-top: 20px; }
+  .step h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 1px 7px; border-radius: 99px; background: var(--neutral-bg); color: var(--muted); text-transform: none; }
+  .tag.ai { background: var(--warn-bg); color: var(--warn); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .stat { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .stat b { display: block; color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .out { display: grid; gap: 6px; }
+  .out > div { display: flex; justify-content: space-between; align-items: center; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; }
+  .out .h { color: var(--muted); font-size: 13px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 14px; }
+  .src { margin: 0; padding-left: 18px; font-size: 13.5px; } .src li { margin-bottom: 6px; }
+  .src a { color: var(--accent); } .src .pub { color: var(--muted); font-size: 12px; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Market<span>Tales</span> AI</h1>
+    <div class="sub" id="provider"></div>
+  </header>
+
+  <section class="panel" aria-label="Analysis controls">
+    <form id="form" class="controls">
+      <div class="field">
+        <span class="lbl" id="modelbl">Period</span>
+        <div class="seg" role="radiogroup" aria-labelledby="modelbl">
+          <input type="radio" name="mode" id="m-day" value="day" checked><label for="m-day">Single day</label>
+          <input type="radio" name="mode" id="m-range" value="range"><label for="m-range">Date range</label>
+          <input type="radio" name="mode" id="m-month" value="month"><label for="m-month">Month</label>
+        </div>
+      </div>
+      <div class="inputs">
+        <div class="field" data-for="day"><label for="in-day">Date</label><input type="date" id="in-day"></div>
+        <div class="field" data-for="range"><label for="in-from">From</label><input type="date" id="in-from"></div>
+        <div class="field" data-for="range"><label for="in-to">To</label><input type="date" id="in-to"></div>
+        <div class="field" data-for="month"><label for="in-month">Month</label><input type="month" id="in-month"></div>
+      </div>
+      <button class="primary" id="go" type="submit">Analyze Market</button>
+    </form>
+    <div class="hint" id="hint">Finds the 5 biggest bullish and 5 biggest bearish movers among ~110 large-cap US stocks. A run takes about a minute or two.</div>
+
+    <div id="status" aria-live="polite">
+      <div class="bar indet" id="bar"><i></i></div>
+      <div class="status-line"><span id="stage">Starting…</span><span id="elapsed"></span></div>
+      <ul class="log" id="log"></ul>
+    </div>
+    <div class="error" id="error" role="alert"></div>
+  </section>
+
+  <section id="summary">
+    <h2 id="s-title"></h2>
+    <div class="meta" id="s-meta"></div>
+  </section>
+
+  <section class="grid" id="grid">
+    <div class="col bull"><h3>▲ Top 5 Bullish</h3><div class="cards" id="bull"></div></div>
+    <div class="col bear"><h3>▼ Top 5 Bearish</h3><div class="cards" id="bear"></div></div>
+  </section>
+
+  <footer id="foot" hidden>Moves are computed from price data (facts). Catalysts and outlooks are AI interpretation/forecasts from headlines only — not investment advice, price targets, or Buy/Sell recommendations.</footer>
+</div>
+
+<div id="backdrop"></div>
+<aside id="drawer" role="dialog" aria-modal="true" aria-label="Stock details" tabindex="-1"></aside>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const el = (tag, props = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  kids.flat().forEach((c) => c != null && n.append(c));
+  return n;
+};
+const pct = (v) => (v == null ? 'n/a' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`);
+const ARROW = { Higher: '↑', Lower: '↓', Unclear: '?' };
+const cls = (d) => (d === 'Higher' ? 'up' : d === 'Lower' ? 'down' : '');
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+
+let today = new Date().toLocaleDateString('en-CA');
+let polling = null, lastFocus = null;
+
+function mode() { return document.querySelector('input[name=mode]:checked').value; }
+function syncMode() {
+  document.querySelectorAll('[data-for]').forEach((f) => (f.hidden = f.dataset.for !== mode()));
+}
+function getRange() {
+  if (mode() === 'day') return { from: $('#in-day').value, to: $('#in-day').value };
+  if (mode() === 'range') return { from: $('#in-from').value, to: $('#in-to').value };
+  const m = $('#in-month').value; // YYYY-MM
+  if (!m) return { from: '', to: '' };
+  const [y, mo] = m.split('-').map(Number);
+  const last = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+  return { from: `${m}-01`, to: last > today ? today : last };
+}
+
+async function init() {
+  try {
+    const c = await (await fetch('/api/config')).json();
+    today = c.today;
+    $('#provider').textContent = `Reasoning: ${c.provider}`;
+    if (c.activeId) attach(c.activeId);
+  } catch { /* server unreachable: keep browser date */ }
+  for (const id of ['#in-day', '#in-from', '#in-to']) { $(id).value = today; $(id).max = today; }
+  $('#in-month').value = today.slice(0, 7); $('#in-month').max = today.slice(0, 7);
+  syncMode();
+}
+
+function showError(msg) { const e = $('#error'); e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
+
+async function start(ev) {
+  ev.preventDefault();
+  showError('');
+  const range = getRange();
+  if (!range.from || !range.to) return showError('Please choose a date.');
+  if (range.from > range.to) return showError('Start date must not be after end date.');
+  setBusy(true);
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(range) });
+    const j = await res.json();
+    if (res.status === 409 && j.id) return attach(j.id);
+    if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+    attach(j.id);
+  } catch (e) { setBusy(false); showError(e.message); }
+}
+
+function setBusy(b) {
+  $('#go').disabled = b;
+  $('#go').textContent = b ? 'Analyzing…' : 'Analyze Market';
+  $('#status').style.display = b ? 'block' : 'none';
+  if (b) { $('#log').replaceChildren(); $('#stage').textContent = 'Starting…'; $('#bar').className = 'bar indet'; $('#bar i').style.width = ''; }
+}
+
+function attach(id) {
+  setBusy(true);
+  clearInterval(polling);
+  const tick = async () => {
+    try {
+      const j = await (await fetch(`/api/jobs/${id}`)).json();
+      if (j.error && !j.status) throw new Error(j.error);
+      $('#elapsed').textContent = `${Math.round(j.elapsedMs / 1000)}s`;
+      $('#log').replaceChildren(...j.progress.slice(-6).map((p) => el('li', { text: p.message })));
+      const last = j.progress.at(-1);
+      $('#stage').textContent = j.total ? `Researching movers… ${j.done}/${j.total}` : (last ? last.message : 'Starting…');
+      if (j.total) { $('#bar').className = 'bar'; $('#bar i').style.width = `${(j.done / j.total) * 100}%`; }
+      if (j.status === 'done') { clearInterval(polling); setBusy(false); render(j.result); }
+      else if (j.status === 'error') { clearInterval(polling); setBusy(false); showError(`Analysis failed: ${j.error}`); }
+    } catch (e) { clearInterval(polling); setBusy(false); showError(e.message); }
+  };
+  tick();
+  polling = setInterval(tick, 1500);
+}
+
+function card(s) {
+  const a = s.analysis;
+  return el('button', { class: 'card', type: 'button', onclick: (e) => openDetail(s, e.currentTarget) },
+    el('div', { class: 'row1' },
+      el('div', {}, el('span', { class: 'tk', text: s.ticker }), el('span', { class: 'nm', text: s.name })),
+      el('span', { class: 'mv', text: pct(s.changePct) })),
+    el('div', { class: 'cat', text: a.catalyst_short }),
+    el('div', { class: 'chips' }, [['1D', a.outlook.d1], ['1W', a.outlook.w1], ['1M', a.outlook.m1]].map(([h, o]) =>
+      el('span', { class: `chip ${cls(o.direction)}`, 'aria-label': `${h} ${o.direction}, ${o.confidence} confidence`, text: `${h} ${ARROW[o.direction]} ${o.confidence}` }))));
+}
+
+function render(r) {
+  $('#s-title').textContent = `Market Movers — ${r.request.label}`;
+  const when = r.sessionDate === r.request.to ? '' : ` (latest session with data: ${r.sessionDate})`;
+  $('#s-meta').textContent = `Measured ${r.baselineDate} close → ${r.sessionDate} close${when} · ${r.scanned} stocks scanned · generated ${new Date(r.generatedAt).toLocaleTimeString()} via ${r.provider}`;
+  for (const [id, list] of [['#bull', r.bullish], ['#bear', r.bearish]]) {
+    $(id).replaceChildren(...(list.length ? list.map(card) : [el('div', { class: 'empty', text: 'No qualifying movers in this period.' })]));
+  }
+  $('#summary').style.display = 'block'; $('#grid').style.display = 'grid'; $('#foot').hidden = false;
+  $('#summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openDetail(s, opener) {
+  const a = s.analysis, d = $('#drawer');
+  lastFocus = opener;
+  const stat = (l, v) => el('div', { class: 'stat' }, l, el('b', { text: v }));
+  const srcs = a.sources.map((n) => ({ ...n, href: safeUrl(n.url) })).filter((n) => n.href);
+  d.replaceChildren(...[
+    el('div', { class: 'd-head' },
+      el('div', {}, el('h2', { text: `${s.ticker} · ${s.name}` }),
+        el('div', { class: 'big', style: `color:var(--${s.changePct >= 0 ? 'bull' : 'bear'})`, text: pct(s.changePct) })),
+      el('button', { class: 'x', type: 'button', 'aria-label': 'Close details', text: '✕', onclick: closeDetail })),
+    a.mode === 'degraded' ? el('div', { class: 'warn', text: 'Automated analysis failed for this stock; outlook shown as Unclear — Low.' }) : null,
+    el('div', { class: 'step' },
+      el('h4', {}, '1 · What happened', el('span', { class: 'tag', text: 'FACT · from price data' })),
+      el('div', { text: `Closed at ${s.close.toFixed(2)} ${s.currency} on ${s.sessionDate}, ${pct(s.changePct)} vs ${s.prevClose.toFixed(2)} on ${s.prevDate}.` }),
+      el('div', { class: 'stats' }, stat('5 sessions', pct(s.ret5dPct)), stat('~1 month', pct(s.ret1mPct)), stat('Volume vs avg', s.volumeRatio ? `${s.volumeRatio.toFixed(1)}×` : 'n/a'))),
+    el('div', { class: 'step' },
+      el('h4', {}, '2 · Why', el('span', { class: 'tag ai', text: 'AI INTERPRETATION · headlines only' })),
+      el('div', { text: a.why })),
+    el('div', { class: 'step' },
+      el('h4', {}, '3 · Outlook', el('span', { class: 'tag ai', text: 'AI FORECAST · not advice' })),
+      el('div', { class: 'out' }, [['Next day', a.outlook.d1], ['Next week', a.outlook.w1], ['Next month', a.outlook.m1]].map(([h, o]) =>
+        el('div', {}, el('span', { class: 'h', text: h }),
+          el('span', { class: `chip ${cls(o.direction)}`, text: `${ARROW[o.direction]} ${o.direction} — ${o.confidence}` })))),
+      el('div', { class: 'note', text: 'Probabilistic and based on limited evidence; not a recommendation or price target.' }),
+      el('h4', { style: 'margin-top:14px' }, 'What could change it'),
+      el('div', { text: a.risks })),
+    el('div', { class: 'step' },
+      el('h4', {}, '4 · Sources'),
+      srcs.length
+        ? el('ol', { class: 'src' }, srcs.map((n) => el('li', {},
+            el('a', { href: n.href, target: '_blank', rel: 'noopener noreferrer', text: n.title }),
+            el('div', { class: 'pub', text: [n.publisher, n.published?.slice(0, 10)].filter(Boolean).join(' · ') }))))
+        : el('div', { class: 'note', text: 'No supporting sources were found for this stock.' })),
+  ].filter(Boolean));
+  document.body.classList.add('open');
+  d.scrollTop = 0; d.focus();
+}
+function closeDetail() { document.body.classList.remove('open'); lastFocus?.focus(); }
+
+document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', syncMode));
+$('#form').addEventListener('submit', start);
+$('#backdrop').addEventListener('click', closeDetail);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('open')) closeDetail(); });
+init();
+</script>
+</body>
+</html>
