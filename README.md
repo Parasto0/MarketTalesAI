@@ -2,6 +2,10 @@
 
 Autonomous research agent: finds the 5 biggest bullish and 5 biggest bearish movers among ~110 large-cap US stocks, researches each one (recent news plus the text of the most relevant articles), and writes a concise directional-outlook report with sources.
 
+![MarketTales AI dashboard: morning overview and top movers](docs/dashboard.png)
+
+_Sample dashboard (trimmed to two cards per side; a full run shows 5 + 5). Figures are from one live-session run on 2026-10-06 and change with every run._
+
 ## Web UI
 
 ```
