@@ -1,0 +1,9 @@
+{
+  "name": "markettales-ai",
+  "version": "0.1.0",
+  "description": "Autonomous daily market-movers research agent (MVP)",
+  "type": "module",
+  "bin": { "markettales": "src/index.js" },
+  "scripts": { "start": "node src/index.js" },
+  "engines": { "node": ">=20" }
+}
